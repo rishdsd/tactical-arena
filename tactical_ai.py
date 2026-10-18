@@ -2,6 +2,9 @@
 import threading
 import time
 
+from collections import Counter
+
+from logger import log
 from ollama_client import choose_tactical_action
 
 
@@ -13,6 +16,7 @@ class TacticalAI:
 
         self.latest_decision = None
         self.lock = threading.Lock()
+        self.stats = Counter()  # ok / failed / requests
 
     def request_decision(self, observation):
         now = time.monotonic()
@@ -25,6 +29,7 @@ class TacticalAI:
                 return
 
             self.request_in_progress = True
+            self.stats["requests"] += 1
             self.last_request_at = now
 
         thread = threading.Thread(
@@ -36,37 +41,21 @@ class TacticalAI:
 
     
     def _run_decision(self, observation):
-        started_at = time.monotonic()
-
         try:
             decision = choose_tactical_action(observation)
 
             if decision is not None:
                 with self.lock:
                     self.latest_decision = decision
-
-                print(
-                    f"[TacticalAI] Decision ready in "
-                    f"{time.monotonic() - started_at:.2f}s: "
-                    f"{decision}",
-                    flush=True,
-                )
+                self.stats["ok"] += 1
             else:
-                print(
-                    "[TacticalAI] No valid decision returned; "
-                    "keeping the existing bot behavior.",
-                    flush=True,
-                )
+                self.stats["failed"] += 1
         except Exception as exc:
-            print(
-                f"[TacticalAI] Unexpected error: "
-                f"{type(exc).__name__}: {exc}",
-                flush=True,
-            )
+            self.stats["failed"] += 1
+            log.debug(f"[TacticalAI] unexpected error: {type(exc).__name__}: {exc}")
         finally:
             with self.lock:
                 self.request_in_progress = False
-
 
     def get_latest_decision(self):
         with self.lock:

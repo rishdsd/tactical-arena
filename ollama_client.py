@@ -3,6 +3,8 @@ import urllib.request
 import urllib.error
 import time
 
+from logger import log
+
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL = "qwen3.5:2b"
@@ -72,11 +74,7 @@ def choose_tactical_action(observation, timeout=8):
     )
 
     started_at = time.monotonic()
-    print(
-        f"[Ollama] Requesting decision | HP={observation.get('bot_hp')} | "
-        f"Actions={available_actions}",
-        flush=True,
-    )
+    log.debug(f"[Ollama] request | HP={observation.get('bot_hp')}")
 
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -87,30 +85,22 @@ def choose_tactical_action(observation, timeout=8):
         action = decision.get("action")
 
         if action not in available_actions:
-            print(
-                f"[Ollama] Invalid action={action!r} | Allowed={available_actions}",
-                flush=True,
-            )
+            log.debug(f"[Ollama] invalid action={action!r}")
             return None
 
         elapsed = time.monotonic() - started_at
-        print(
-            f"[Ollama] Response in {elapsed:.2f}s | Action={action} | "
-            f"Reason={decision.get('reason', '')}",
-            flush=True,
-        )
+        log.debug(f"[Ollama] {elapsed:.2f}s action={action} reason={decision.get('reason', '')}")
 
         return {
             "action": action,
             "target_id": None,
             "reason": str(decision.get("reason", ""))[:200],
+            "latency": elapsed,
+            # Keep the rule hint we sent, so logs can measure LLM-vs-rules agreement.
+            "rules_suggest": observation.get("rules_suggest"),
         }
 
     except (urllib.error.URLError, TimeoutError, OSError, ValueError, TypeError) as exc:
         elapsed = time.monotonic() - started_at
-        print(
-            f"[Ollama] Request failed after {elapsed:.2f}s | "
-            f"{type(exc).__name__}: {exc}",
-            flush=True,
-        )
+        log.debug(f"[Ollama] failed after {elapsed:.2f}s | {type(exc).__name__}: {exc}")
         return None

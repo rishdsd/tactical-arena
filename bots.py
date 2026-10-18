@@ -12,6 +12,8 @@ from bot_policy import (
 )
 from arena import move_with_walls, circle_hits_rect, walls
 from experience import profile
+from logger import log
+import config
 from tactics import (
     step_toward, reset_tactics, update_cover_peek, update_flank,
 )
@@ -37,6 +39,11 @@ def use_abilities(bot, prof, characters, fire_projectiles, water_walls, now):
                         FireProjectile(bot.pos + direction * (bot.radius + 5), direction, bot)
                     )
                     bot.fire_burst_ready_at = now + FIRE_COOLDOWN
+                    bot.stats["fire_casts"] += 1
+                    log.event(
+                        "cast", ability="fire", bot=bot.name, hp=bot.hp, mode=bot.mode,
+                        pos=bot.pos, aim=target, dist=round(bot.pos.distance_to(target)),
+                    )
 
     if water_walls is not None and prof.water_wall:
         decision = choose_water_wall_position(bot, characters, now)
@@ -44,6 +51,8 @@ def use_abilities(bot, prof, characters, fire_projectiles, water_walls, now):
             position, threat_direction = decision
             water_walls.append(WaterWall(position, threat_direction, now))
             bot.water_wall_ready_at = now + WATER_WALL_COOLDOWN
+            bot.stats["water_casts"] += 1
+            log.event("cast", ability="water", bot=bot.name, hp=bot.hp, mode=bot.mode, pos=position)
 
 
 # -------------------- Decision making --------------------
@@ -101,7 +110,7 @@ def resolve_mode(bot, contact, prof, now, rule):
     return mode
 
 
-def consult_planner(bot, contact, prof, now, visible_count, rule, tactical_ai):
+def consult_planner(bot, contact, prof, now, visible_count, rule, tactical_ai, characters):
     hp_ratio = bot.hp / bot.max_hp
     actions = ["attack", "cover_peek"] + (["flank"] if prof.flank else [])
 
@@ -115,8 +124,8 @@ def consult_planner(bot, contact, prof, now, visible_count, rule, tactical_ai):
         "enemy_hp": contact.enemy.hp if contact.visible else None,
         "visible_enemy_count": visible_count,
         "ally_alive": any(
-            c.alive and c is not bot and c.team == bot.team for c in bot.contacts_all
-        ) if hasattr(bot, "contacts_all") else True,
+            c.alive and c is not bot and c.team == bot.team for c in characters
+        ),
         "rules_suggest": rule,
         "available_actions": actions,
     }
@@ -127,11 +136,18 @@ def consult_planner(bot, contact, prof, now, visible_count, rule, tactical_ai):
     if decision is not None:
         bot.planner_action = decision["action"]
         bot.planner_at = now
-        print(
-            f"[Bot] {bot.name}: planner chose {bot.planner_action} | "
-            f"HP={bot.hp} | Lv{prof.experience}",
-            flush=True,
-        )
+        agrees = decision.get("rules_suggest") == decision["action"]
+        bot.stats["planner_n"] += 1
+        bot.stats["planner_agree"] += int(agrees)
+        bot.stats["planner_" + decision["action"]] += 1
+        bot.stats["planner_latency"] += decision.get("latency", 0.0)
+        if config.LOG_PLANNER_EVENTS:
+            log.event(
+                "planner", bot=bot.name, hp=bot.hp, rule=decision.get("rules_suggest"),
+                choice=decision["action"], lat=round(decision.get("latency", 0.0), 2),
+                vis=visible_count, dist=observation["enemy_distance"],
+                reason=decision.get("reason", "")[:80],
+            )
 
 
 # -------------------- Movement --------------------
@@ -225,6 +241,7 @@ def try_shoot(bot, contact, prof, now, bullets):
     aim = pygame.Vector2(math.cos(angle), math.sin(angle))
     bullets.append(Bullet(bot.pos + aim * (bot.radius + 3), aim, bot))
     bot.last_shot = now
+    bot.stats["shots"] += 1
 
 
 # -------------------- Main entry point --------------------
@@ -246,7 +263,6 @@ def bot_update(
         return
 
     prof = profile(bot.experience)
-    bot.contacts_all = characters  # used for "is my ally alive" in the planner prompt
 
     use_abilities(bot, prof, characters, fire_projectiles, water_walls, now)
 
@@ -256,11 +272,13 @@ def bot_update(
 
     # Occasional high-level decision from the LLM (non-blocking).
     if tactical_ai is not None and contact is not None and prof.uses_llm:
-        consult_planner(bot, contact, prof, now, visible_count, rule, tactical_ai)
+        consult_planner(bot, contact, prof, now, visible_count, rule, tactical_ai, characters)
 
     mode = resolve_mode(bot, contact, prof, now, rule)
+    bot.stats["t_" + mode] += dt
     if mode != bot.mode:
         bot.mode = mode
+        bot.stats["mode_switches"] += 1
         reset_tactics(bot, now)
 
     handled = False

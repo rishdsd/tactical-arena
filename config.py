@@ -34,3 +34,28 @@ WATER_WALL_MAX_RANGE = 280
 
 WATER_CYAN = (65, 210, 245)
 WATER_LIGHT = (175, 245, 255)
+
+# ======================= Simulation & logging switches =======================
+# SIMULATION_MODE = True  -> no human player: 2 AI bots vs 2 AI bots. Rounds and
+#                            matches restart automatically, forever (or until
+#                            SIM_MAX_MATCHES). False -> the normal game you play.
+SIMULATION_MODE = True
+
+SIM_RENDER = True           # False: no drawing (window stays blank/hidden-ish)
+SIM_FAST_FORWARD = False    # True: run faster than real time (see note below)
+SIM_STEPS_PER_FRAME = 8     # game steps per loop when fast-forwarding
+SIM_BLUE_EXPERIENCE = (100, 100)
+SIM_RED_EXPERIENCE = (80, 80)
+SIM_ROUND_TIMEOUT = 90.0    # seconds of game time; then the round is a draw
+SIM_ROUND_PAUSE = 1.0       # game seconds between rounds (0 when fast-forwarding)
+SIM_MAX_MATCHES = 0         # 0 = run until you close the window
+
+# The LLM planner switch. False = rules-only bots (the baseline for comparisons).
+# Note: Ollama replies take real (wall-clock) time, so with SIM_FAST_FORWARD the
+# LLM looks "slower" in game time. Use fast-forward mainly with the planner off.
+LLM_PLANNER_ENABLED = True
+
+LOG_TO_FILE = True
+LOG_DIR = "logs"
+LOG_VERBOSE = False         # True: also print Ollama/tactics chatter to console
+LOG_PLANNER_EVENTS = True   # one file line per LLM decision

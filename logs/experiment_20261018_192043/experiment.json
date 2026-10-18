@@ -1,0 +1,43 @@
+{
+  "games_per_condition": 3,
+  "steps_per_frame": 40,
+  "conditions": [
+    {
+      "name": "100_vs_20",
+      "blue": 100,
+      "red": 20,
+      "seed": 101
+    },
+    {
+      "name": "100_vs_40",
+      "blue": 100,
+      "red": 40,
+      "seed": 102
+    },
+    {
+      "name": "100_vs_50",
+      "blue": 100,
+      "red": 50,
+      "seed": 103
+    },
+    {
+      "name": "100_vs_80_run1",
+      "blue": 100,
+      "red": 80,
+      "seed": 104
+    },
+    {
+      "name": "100_vs_80_run2",
+      "blue": 100,
+      "red": 80,
+      "seed": 105
+    },
+    {
+      "name": "100_vs_100_control",
+      "blue": 100,
+      "red": 100,
+      "seed": 106
+    }
+  ],
+  "started": "Sun Oct 18 19:20:43 2026"
+}

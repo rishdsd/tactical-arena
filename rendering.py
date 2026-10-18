@@ -11,7 +11,7 @@ def render_frame(
     fire_projectiles, fire_zones, water_walls,
     blue_rounds, red_rounds, round_number,
     round_over, match_over, round_message, player,
-    player_fire_burst_ready_at, water_wall_ready_at, walls,
+    player_fire_burst_ready_at, water_wall_ready_at, walls, sim_info=None,
 ):
     def draw_text(text, x, y, color=WHITE, font_obj=None):
         if font_obj is None:
@@ -81,60 +81,49 @@ def render_frame(
         name_surface = small_font.render(label, True, WHITE)
         screen.blit(name_surface, name_surface.get_rect(center=(character.pos.x, character.pos.y + 29)))
 
-    if player.alive:
-        aim = pygame.Vector2(pygame.mouse.get_pos()) - player.pos
-        if aim.length_squared() > 0:
-            aim.scale_to_length(player.radius + 10)
-            pygame.draw.line(screen, WHITE, player.pos, player.pos + aim, 3)
-    mx, my = pygame.mouse.get_pos()
-    pygame.draw.circle(screen, WHITE, (mx, my), 8, 1)
-    pygame.draw.line(screen, WHITE, (mx - 12, my), (mx - 4, my), 1)
-    pygame.draw.line(screen, WHITE, (mx + 4, my), (mx + 12, my), 1)
-    pygame.draw.line(screen, WHITE, (mx, my - 12), (mx, my - 4), 1)
-    pygame.draw.line(screen, WHITE, (mx, my + 4), (mx, my + 12), 1)
+    if player is not None:
+        if player.alive:
+            aim = pygame.Vector2(pygame.mouse.get_pos()) - player.pos
+            if aim.length_squared() > 0:
+                aim.scale_to_length(player.radius + 10)
+                pygame.draw.line(screen, WHITE, player.pos, player.pos + aim, 3)
+        mx, my = pygame.mouse.get_pos()
+        pygame.draw.circle(screen, WHITE, (mx, my), 8, 1)
+        pygame.draw.line(screen, WHITE, (mx - 12, my), (mx - 4, my), 1)
+        pygame.draw.line(screen, WHITE, (mx + 4, my), (mx + 12, my), 1)
+        pygame.draw.line(screen, WHITE, (mx, my - 12), (mx, my - 4), 1)
+        pygame.draw.line(screen, WHITE, (mx, my + 4), (mx, my + 12), 1)
 
     pygame.draw.rect(screen, (14, 17, 24), (0, HEIGHT - 55, WIDTH, 55))
-    ally = next(c for c in characters if c.name == "ALLY")
-    draw_text(f"YOU HP: {player.hp}", 16, HEIGHT - 42, GREEN if player.hp > 30 else RED)
-    draw_text(f"AMMO: {player.ammo}/{MAGAZINE_SIZE}", 175, HEIGHT - 42, YELLOW)
-    draw_text(f"ALLY: {'UP' if ally.alive else 'DOWN'} ({ally.hp} HP)", 365, HEIGHT - 42, BLUE_LIGHT)
-    fire_ready_in = max(0.0, player_fire_burst_ready_at - now)
-    fire_label = (
-        "Q FIRE: READY"
-        if fire_ready_in <= 0
-        else f"Q FIRE: {fire_ready_in:.1f}s"
-    )
-    draw_text(
-        fire_label, 570, HEIGHT - 42,
-        FIRE_YELLOW if fire_ready_in <= 0 else MUTED,
-        small_font,
-    )
 
-    water_ready_in = max(0.0, water_wall_ready_at - now)
-    water_label = (
-        "E WATER: READY"
-        if water_ready_in <= 0
-        else f"E WATER: {water_ready_in:.1f}s"
-    )
-    draw_text(
-        water_label, 750, HEIGHT - 42,
-        WATER_LIGHT if water_ready_in <= 0 else MUTED,
-        small_font,
-    )
-
-    draw_text(
-        "WASD move | Mouse aim | Click shoot | R reload",
-        570, HEIGHT - 22, MUTED, small_font,
-    )
-
-    if player.reloading:
-        draw_text("RELOADING...", 18, HEIGHT - 72, YELLOW, small_font)
+    if player is None:
+        # Simulation HUD: no human, so show match info instead.
+        draw_text(sim_info or "SIMULATION", 16, HEIGHT - 42, YELLOW)
+        for idx, c in enumerate(characters):
+            col = BLUE_LIGHT if c.team == "blue" else RED_LIGHT
+            mode = c.mode or "-"
+            draw_text(f"{c.name} Lv{c.experience}: {c.hp}HP {mode}", 16 + idx * 245, HEIGHT - 22, col, small_font)
+    else:
+        ally = next(c for c in characters if c.name == "ALLY")
+        draw_text(f"YOU HP: {player.hp}", 16, HEIGHT - 42, GREEN if player.hp > 30 else RED)
+        draw_text(f"AMMO: {player.ammo}/{MAGAZINE_SIZE}", 175, HEIGHT - 42, YELLOW)
+        draw_text(f"ALLY: {'UP' if ally.alive else 'DOWN'} ({ally.hp} HP)", 365, HEIGHT - 42, BLUE_LIGHT)
+        fire_ready_in = max(0.0, player_fire_burst_ready_at - now)
+        fire_label = "Q FIRE: READY" if fire_ready_in <= 0 else f"Q FIRE: {fire_ready_in:.1f}s"
+        draw_text(fire_label, 570, HEIGHT - 42, FIRE_YELLOW if fire_ready_in <= 0 else MUTED, small_font)
+        water_ready_in = max(0.0, water_wall_ready_at - now)
+        water_label = "E WATER: READY" if water_ready_in <= 0 else f"E WATER: {water_ready_in:.1f}s"
+        draw_text(water_label, 750, HEIGHT - 42, WATER_LIGHT if water_ready_in <= 0 else MUTED, small_font)
+        draw_text("WASD move | Mouse aim | Click shoot | R reload", 570, HEIGHT - 22, MUTED, small_font)
+        if player.reloading:
+            draw_text("RELOADING...", 18, HEIGHT - 72, YELLOW, small_font)
 
     if round_over:
         color = GREEN if blue_rounds > red_rounds else RED
         overlay = large_font.render(round_message, True, color)
         screen.blit(overlay, overlay.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 15)))
-        prompt = "Enter: restart match" if match_over else "Enter: next round"
-        label = font.render(prompt, True, WHITE)
-        screen.blit(label, label.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 25)))
+        if player is not None:
+            prompt = "Enter: restart match" if match_over else "Enter: next round"
+            label = font.render(prompt, True, WHITE)
+            screen.blit(label, label.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 25)))
     pygame.display.flip()

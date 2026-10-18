@@ -1,3 +1,5 @@
+from collections import Counter
+
 import pygame
 from config import (
     PLAYER_RADIUS, PLAYER_MAX_HP, BOT_MAX_HP, MAGAZINE_SIZE,
@@ -13,6 +15,7 @@ class Character:
         self.experience = experience if experience is not None else (100 if is_human else 50)
         # What this character believes about enemies (fog of war).
         self.contacts = {}
+        self.stats = Counter()  # per-round counters for the logs
         # Bot decision state.
         self.mode = None
         self.planner_action, self.planner_at = None, -99.0
@@ -65,6 +68,8 @@ class FireZone:
         self.created_at = now
         self.expires_at = now + FIRE_ZONE_DURATION
         self.next_damage_at = {}
+        self.ticks = {}       # victim -> [ticks, ticks_hiding, ticks_through_wall]
+        self.logged = False
 
 
 class WaterWall:

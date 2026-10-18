@@ -1,0 +1,2 @@
+{"k": "run_start", "m": 0, "r": 0, "t": 0.0, "sim": true, "blue_exp": [100, 100], "red_exp": [80, 80], "llm": true, "model": "qwen3.5:2b", "round_timeout": 90.0, "fast_forward": false}
+{"k": "round_start", "m": 1, "r": 1, "t": 0.0, "chars": [{"name": "BLUE 1", "team": "blue", "exp": 100}, {"name": "BLUE 2", "team": "blue", "exp": 100}, {"name": "RED 1", "team": "red", "exp": 80}, {"name": "RED 2", "team": "red", "exp": 80}]}

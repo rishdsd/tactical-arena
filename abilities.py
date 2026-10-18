@@ -1,7 +1,8 @@
 import pygame
 
 from config import WIDTH, HEIGHT, FIRE_PROJECTILE_RANGE, FIRE_ZONE_RADIUS, FIRE_DAMAGE, FIRE_DAMAGE_INTERVAL, WATER_WALL_THICKNESS, WATER_WALL_DURATION
-from arena import circle_hits_rect
+from arena import circle_hits_rect, clear_line_of_sight
+from logger import log
 from entities import FireZone, WaterWall
 
 
@@ -44,13 +45,53 @@ def update_fire_abilities(fire_projectiles, fire_zones, characters, walls, now, 
                 zone.next_damage_at.pop(victim, None)
                 continue
             if now >= zone.next_damage_at.get(victim, zone.created_at):
+                before = victim.hp
                 victim.hp = max(0, victim.hp - FIRE_DAMAGE)
+                dealt = before - victim.hp
                 zone.next_damage_at[victim] = now + FIRE_DAMAGE_INTERVAL
+
+                # Bookkeeping: was the victim hiding? Was a wall in between?
+                hiding = (
+                    victim.mode == "cover_peek"
+                    and victim.tac_state in ("seek_cover", "in_cover", "return_cover")
+                )
+                through_wall = not clear_line_of_sight(victim.pos, zone.pos)
+                entry = zone.ticks.setdefault(victim, [0, 0, 0])
+                entry[0] += 1
+                entry[1] += int(hiding)
+                entry[2] += int(through_wall)
+                victim.stats["dmg_fire_taken"] += dealt
+                victim.stats["fire_ticks"] += 1
+                victim.stats["fire_ticks_hiding"] += int(hiding)
+                victim.stats["fire_ticks_through_wall"] += int(through_wall)
+                zone.owner.stats["dmg_dealt"] += dealt
+                zone.owner.stats["dmg_fire_dealt"] += dealt
+                log.note_damage()
+
                 if victim.hp == 0:
                     victim.alive = False
                     zone.owner.kills += 1
+                    log.event("death", victim=victim.name, killer=zone.owner.name,
+                              cause="fire", mode=victim.mode)
+
+    for zone in fire_zones:
+        if now >= zone.expires_at:
+            log_fire_zone(zone)
     fire_zones = [z for z in fire_zones if now < z.expires_at]
     return fire_projectiles, fire_zones
+
+
+def log_fire_zone(zone):
+    """One summary line per burning zone: who stood in it, and for how long."""
+    if zone.logged:
+        return
+    zone.logged = True
+    log.event(
+        "fire_zone",
+        owner=zone.owner.name,
+        pos=zone.pos,
+        victims={v.name: [v.team] + t for v, t in zone.ticks.items()},  # team, ticks, hiding, wall
+    )
 
 def update_water_walls(water_walls, now):
     """Remove barriers after their duration expires."""

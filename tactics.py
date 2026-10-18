@@ -4,6 +4,7 @@ import time
 import pygame
 
 from config import WIDTH, HEIGHT, BOT_SPEED
+from logger import log
 from arena import clear_line_of_sight, find_path, move_with_walls, circle_hits_rect, walls
 
 
@@ -96,11 +97,13 @@ def update_cover_peek(bot, contact, dt, now, prof):
         bot.cover_pos = find_cover_position(bot, threat)
         if bot.cover_pos is None:
             bot.cover_failed_until = now + 2.0
-            print(f"[Tactics] {bot.name}: no reachable cover found", flush=True)
+            bot.stats["cover_not_found"] += 1
+            log.debug(f"[Tactics] {bot.name}: no reachable cover found")
             return False
         bot.tac_state = "seek_cover"
         bot.tac_since = now
-        print(f"[Tactics] {bot.name}: cover cycle started", flush=True)
+        bot.stats["cover_cycles"] += 1
+        log.debug(f"[Tactics] {bot.name}: cover cycle started")
 
     state = bot.tac_state
 
@@ -111,21 +114,23 @@ def update_cover_peek(bot, contact, dt, now, prof):
         and clear_line_of_sight(bot.cover_pos, threat)
     ):
         bot.cover_pos = None
+        bot.stats["cover_repicks"] += 1
         return True
 
     if state == "seek_cover":
         if step_toward(bot, bot.cover_pos, dt):
             bot.tac_state = "in_cover"
             bot.tac_since = now
-            print(f"[Tactics] {bot.name}: in cover", flush=True)
+            log.debug(f"[Tactics] {bot.name}: in cover")
         return True
 
     if state == "in_cover":
         if now - bot.tac_since >= prof.peek_pause:
             bot.tac_state = "peeking"
+            bot.stats["peeks"] += 1
             bot.tac_since = now
             bot.peek_visible_since = None
-            print(f"[Tactics] {bot.name}: peeking", flush=True)
+            log.debug(f"[Tactics] {bot.name}: peeking")
         return True
 
     if state == "peeking":
@@ -134,12 +139,14 @@ def update_cover_peek(bot, contact, dt, now, prof):
                 bot.peek_visible_since = now
             elif now - bot.peek_visible_since >= prof.peek_exposure:
                 bot.tac_state = "return_cover"
-                print(f"[Tactics] {bot.name}: returning to cover", flush=True)
+                bot.stats["peek_exposed"] += 1
+                log.debug(f"[Tactics] {bot.name}: returning to cover")
         else:
             bot.peek_visible_since = None
             if now - bot.tac_since >= 1.5:
                 bot.tac_state = "return_cover"
-                print(f"[Tactics] {bot.name}: peek timed out", flush=True)
+                bot.stats["peek_timeouts"] += 1
+                log.debug(f"[Tactics] {bot.name}: peek timed out")
             else:
                 step_toward(bot, threat, dt)
         return True
@@ -149,7 +156,7 @@ def update_cover_peek(bot, contact, dt, now, prof):
             bot.tac_state = "in_cover"
             bot.tac_since = now
             bot.peek_visible_since = None
-            print(f"[Tactics] {bot.name}: back in cover", flush=True)
+            log.debug(f"[Tactics] {bot.name}: back in cover")
         return True
 
     return False
@@ -192,13 +199,15 @@ def update_flank(bot, contact, dt, now):
             bot.flank_done_until = now + 4.0
             bot.planner_action = None
             return False
-        print(f"[Tactics] {bot.name}: flanking", flush=True)
+        bot.stats["flanks"] += 1
+        log.debug(f"[Tactics] {bot.name}: flanking")
 
     if step_toward(bot, bot.flank_pos, dt) or now - bot.flank_since > 5.0:
         bot.flank_pos = None
         bot.flank_done_until = now + 5.0
         bot.planner_action = None
-        print(f"[Tactics] {bot.name}: flank finished", flush=True)
+        bot.stats["flanks_done"] += 1
+        log.debug(f"[Tactics] {bot.name}: flank finished")
         return False
 
     return True
